@@ -303,6 +303,7 @@ export class Game {
     this.progress = 0;
     this.boosterThreshold = C.boosters.firstThreshold;
     this.boosterQueue = [];
+    this.backRowQueue = [];
     this.throws = 0;
     this.spawnTimer = 0;
     this.wildTimer = 0;
@@ -637,13 +638,38 @@ export class Game {
         break;
       case 'return':
         offset = Pz.distance * (1 - easeInOut(Math.min(1, s.t / Pz.returnDuration)));
-        if (s.t >= Pz.returnDuration) { s.phase = 'idle'; s.t = 0; }
+        if (s.t >= Pz.returnDuration) {
+          s.phase = 'idle';
+          s.t = 0;
+          if (Pz.spawnBoxes.enabled) this._queueBackRow();
+        }
         break;
       default:
         this.pusherMat.emissiveIntensity = 0;
     }
     const targetZ = this.pusherRestZ + offset;
     this.pusherBody.velocity.z = dt > 0 ? (targetZ - this.pusherBody.position.z) / dt : 0;
+  }
+
+  _queueBackRow() {
+    const S = C.pusher.spawnBoxes;
+    S.xPositions.forEach((x, i) => this.backRowQueue.push({ x, delay: i * S.stagger }));
+  }
+
+  _updateBackRow(dt) {
+    const S = C.pusher.spawnBoxes;
+    for (let i = this.backRowQueue.length - 1; i >= 0; i--) {
+      const q = this.backRowQueue[i];
+      q.delay -= dt;
+      if (q.delay > 0) continue;
+      this.backRowQueue.splice(i, 1);
+      const e = this._createEntity('normal', this._pickSpawnValue());
+      this._addBody(e, new THREE.Vector3(q.x, HALF + S.dropHeight, S.z));
+      e.state = 'board';
+      e.armed = true;
+      e.spawnAnim = 0;
+      e.mesh.scale.setScalar(0.001);
+    }
   }
 
   _checkGameOver(dt) {
@@ -691,13 +717,6 @@ export class Game {
 
     if (this.held) {
       const h = this.held;
-      if (h.spawnAnim >= 0) {
-        h.spawnAnim += dt / C.throw.spawnAnimDuration;
-        const k = h.spawnAnim >= 1 ? 1 : easeOutBack(h.spawnAnim);
-        const base = h.kind === 'glove' ? C.boosters.glove.scale : [1, 1, 1];
-        h.mesh.scale.set(base[0] * k, base[1] * k, base[2] * k);
-        if (h.spawnAnim >= 1) h.spawnAnim = -1;
-      }
       let dir = 0;
       if (this.keys.has('ArrowLeft') || this.keys.has('KeyA')) dir -= 1;
       if (this.keys.has('ArrowRight') || this.keys.has('KeyD')) dir += 1;
@@ -724,6 +743,13 @@ export class Game {
         e.mesh.position.copy(e.body.position);
         e.mesh.quaternion.copy(e.body.quaternion);
       }
+      if (e.spawnAnim >= 0) {
+        e.spawnAnim += dt / C.throw.spawnAnimDuration;
+        const k = e.spawnAnim >= 1 ? 1 : easeOutBack(e.spawnAnim);
+        const base = e.kind === 'glove' ? C.boosters.glove.scale : [1, 1, 1];
+        e.mesh.scale.set(base[0] * k, base[1] * k, base[2] * k);
+        if (e.spawnAnim >= 1) e.spawnAnim = -1;
+      }
       if (e.popAnim >= 0) {
         e.popAnim += dt / C.merge.popDuration;
         const t = Math.min(1, e.popAnim);
@@ -745,6 +771,7 @@ export class Game {
         }
         if (e.state === 'moving' && e.body && (e.hit || (e.age > 0.3 && e.body.velocity.length() < 0.5))) this._settle(e);
       }
+      this._updateBackRow(dt);
       this._checkMerges();
       this._checkGameOver(dt);
       if (this.entities.some((e) => e.state === 'dead')) this.entities = this.entities.filter((e) => e.state !== 'dead');

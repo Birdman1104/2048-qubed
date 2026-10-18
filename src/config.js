@@ -69,6 +69,14 @@ export const CONFIG = {
     pushDuration: 1.1,
     holdDuration: 0.25,
     returnDuration: 0.9,
+    // new boxes dropped in at the back once the pusher has retracted
+    spawnBoxes: {
+      enabled: true,
+      xPositions: [-1.8, 0, 1.8], // one box per entry
+      z: -8.35,
+      dropHeight: 1.2, // boxes fall in from this height above the floor
+      stagger: 0.08, // delay between each box appearing
+    },
   },
 
   physics: {
