@@ -1,0 +1,20 @@
+{
+  "name": "qube-2048",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "build:single": "vite build --mode single",
+    "preview": "vite preview --host"
+  },
+  "dependencies": {
+    "cannon-es": "^0.20.0",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "vite": "^8.3.4",
+    "vite-plugin-singlefile": "^2.3.0"
+  }
+}
