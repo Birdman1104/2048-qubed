@@ -60,10 +60,13 @@ export const CONFIG = {
     warnColor: "#ff5a3a",
     height: 0.9,
     thickness: 0.5,
-    trigger: "throws", // 'throws' | 'time'
-    everyThrows: 4,
-    everySeconds: 10,
-    delayAfterThrow: 1.0, // wait for the thrown box to settle before pushing
+    trigger: "time", // 'throws' | 'time'
+    everyThrows: 4, // used when trigger is 'throws'
+    everySeconds: 12, // starting seconds between pushes
+    minEverySeconds: 4, // floor — never pushes more often than this
+    // every this many seconds of play, the interval drops by 1s (down to minEverySeconds)
+    secondsPerIntervalStep: 35,
+    delayAfterThrow: 1.0, // wait for the thrown box to settle before pushing (throws trigger)
     warnDuration: 0.9, // blinking before the push
     distance: 1.6, // how far it pushes forward
     pushDuration: 1.1,
@@ -72,7 +75,7 @@ export const CONFIG = {
     // new boxes dropped in at the back once the pusher has retracted
     spawnBoxes: {
       enabled: true,
-      xPositions: [-1.8, 0, 1.8], // one box per entry
+      xPositions: [-2.1, -0.7, 0.7, 2.1], // one box per entry
       z: -8.35,
       dropHeight: 1.2, // boxes fall in from this height above the floor
       stagger: 0.08, // delay between each box appearing
@@ -92,8 +95,8 @@ export const CONFIG = {
     angularFactor: [1, 1, 1], // set to [0, 1, 0] to stop boxes from tipping over
     // a thrown box glides frictionless and straight, with rotation locked, until it hits another box
     thrownLinearDamping: 0.04,
-    friction: { boxFloor: 0.5, boxBox: 0.3, boxWall: 0.05 },
-    restitution: { boxFloor: 0.02, boxBox: 0.03, boxWall: 0.08 },
+    friction: { boxFloor: 0.5, boxBox: 0.1, boxWall: 0.05 },
+    restitution: { boxFloor: 0.01, boxBox: 0.01, boxWall: 0.01 },
   },
 
   box: {
@@ -118,6 +121,11 @@ export const CONFIG = {
       512: "#18a88c",
       1024: "#ff6a2a",
       2048: "#ffd700",
+      4096: "#7cff4a",
+      8192: "#ff4ad2",
+      16384: "#4a9fff",
+      32768: "#ff9f4a",
+      65536: "#c0ff4a",
     },
     // used for values above the highest defined in `colors`
     fallbackColors: ["#a0522d", "#4b0082", "#008b8b", "#b22222", "#556b2f"],
@@ -136,8 +144,8 @@ export const CONFIG = {
   merge: {
     // two boxes merge if they are in physical contact, or their centers are closer than size * this
     touchDistanceFactor: 1.04,
-    jumpVelocity: 7.5,
-    seekStrength: 1.0, // 0..1 how far towards the closest same-value box it travels
+    jumpVelocity: 4.5,
+    seekStrength: 0.75, // 0..1 how far towards the closest same-value box it travels
     seekMaxDistance: 5, // ignore same-value boxes further than this
     spin: 5,
     cooldown: 0.06,
@@ -161,8 +169,8 @@ export const CONFIG = {
       { value: 4, x: 0 },
       { value: 8, x: 1.8 },
     ],
-    // New boxes pick a value among those currently on the board, never above the board max.
-    maxSpawnValue: 64,
+    // New boxes pick a value ≤ board max (any power of 2 in range), never above maxSpawnValue.
+    maxSpawnValue: 256,
     smallBias: 0.6, // 0..1, lower = strongly prefer small values
     fallbackPool: [2, 4],
   },
@@ -177,10 +185,28 @@ export const CONFIG = {
     storageKey: "qube2048.best",
   },
 
+  // Global top-100 leaderboard backed by Supabase (run supabase/schema.sql in your project first).
+  // Project Settings -> API: paste the project URL and the anon / publishable key (both are safe to ship).
+  // Left empty, `npm run dev` uses a fake leaderboard and production builds show it as unavailable.
+  leaderboard: {
+    supabaseUrl: "https://vwcfsycpwzglwkkzojoo.supabase.co",
+    supabaseAnonKey: "sb_publishable__j_r13lwYdoVozHv30G9cg_3UXUuWye",
+    size: 100,
+    timeoutMs: 8000,
+  },
+
+  crazygames: {
+    // Official CrazyGames leaderboard (invite-only). Paste the Encryption Key from the Developer Portal to enable.
+    leaderboardEncryptionKey: "",
+  },
+
   boosters: {
     firstThreshold: 80, // points needed for the first booster
     thresholdGrowth: 2, // each next booster needs this many times more points
     weights: { bomb: 1, wild: 1, glove: 1 }, // set to 0 to disable a booster
+    // progress bar drains while the player is not throwing
+    idleGrace: 2.5, // seconds of inactivity before decay starts
+    idleDecayPerSecond: 12, // points lost per second once idle
 
     bomb: {
       radius: 2.1,

@@ -75,16 +75,74 @@ canvas.game { display: block; width: 100%; height: 100%; touch-action: none; }
 }
 .overlay.hidden { opacity: 0; pointer-events: none; }
 .panel {
-  text-align: center; padding: 32px 44px; border-radius: 24px;
+  text-align: center; padding: 32px 44px; border-radius: 24px; max-width: 94vw;
   background: linear-gradient(160deg, #3b2a7a, #1f2440); box-shadow: 0 20px 60px rgba(0,0,0,0.5);
 }
 .panel h1 { font-size: 36px; letter-spacing: 3px; color: #ff4a4a; margin-bottom: 16px; }
 .final-label { font-size: 12px; letter-spacing: 3px; opacity: 0.7; }
 .final-score { font-size: 56px; font-weight: bold; }
 .final-best { font-size: 14px; opacity: 0.6; margin-bottom: 22px; }
-.restart {
+.btn {
   font: inherit; font-size: 20px; font-weight: bold; color: #fff; cursor: pointer;
   padding: 14px 34px; border: 0; border-radius: 40px; background: var(--accent);
   box-shadow: 0 5px 0 rgba(0,0,0,0.3);
 }
-.restart:active { transform: translateY(3px); box-shadow: 0 2px 0 rgba(0,0,0,0.3); }
+.btn:active { transform: translateY(3px); box-shadow: 0 2px 0 rgba(0,0,0,0.3); }
+
+.menu .panel { padding: 36px 48px; }
+.menu .title { font-size: 44px; font-weight: bold; letter-spacing: 2px; text-shadow: 0 3px 0 rgba(0,0,0,0.35); }
+.menu .title span { color: var(--accent); }
+.hello { font-size: 22px; margin-top: 18px; overflow-wrap: anywhere; }
+.player-name { color: var(--accent); font-weight: bold; }
+.menu-best { font-size: 14px; opacity: 0.6; margin: 6px 0 26px; }
+.menu .play { font-size: 24px; padding: 16px 56px; }
+.login {
+  position: absolute; top: max(14px, env(safe-area-inset-top)); right: 14px;
+  font: inherit; font-size: 13px; font-weight: bold; letter-spacing: 1px; color: var(--text); cursor: pointer;
+  padding: 8px 16px; border: 1px solid rgba(255,255,255,0.35); border-radius: 20px; background: rgba(255,255,255,0.08);
+}
+.login.hidden { display: none; }
+
+.gameover-panel {
+  display: flex; flex-direction: column; align-items: center;
+  width: 400px; max-height: 94vh; padding: 24px 22px;
+}
+.gameover-panel h1 { margin-bottom: 8px; }
+.gameover-panel .final-score { font-size: 48px; line-height: 1.1; }
+.gameover-panel .final-best { margin-bottom: 14px; }
+.gameover-panel .restart { margin-top: 16px; flex-shrink: 0; }
+.board {
+  width: 100%; min-height: 0; display: flex; flex-direction: column;
+  border-radius: 14px; background: rgba(0,0,0,0.25); padding: 10px 8px;
+}
+.board-head { font-size: 13px; letter-spacing: 3px; opacity: 0.75; }
+.board-status { font-size: 15px; font-weight: bold; color: var(--accent); margin: 4px 0 8px; min-height: 18px; }
+.board-list {
+  position: relative; list-style: none; overflow-y: auto; min-height: 150px; max-height: 34vh;
+  touch-action: pan-y; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.3) transparent;
+}
+.board-list::-webkit-scrollbar { width: 6px; }
+.board-list::-webkit-scrollbar-track { background: transparent; }
+.board-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 3px; }
+@media (max-height: 720px) {
+  .gameover-panel { padding: 16px 18px; }
+  .gameover-panel h1 { font-size: 28px; margin-bottom: 4px; }
+  .gameover-panel .final-score { font-size: 38px; }
+  .gameover-panel .final-best { margin-bottom: 10px; }
+  .gameover-panel .restart { margin-top: 12px; padding: 11px 30px; font-size: 18px; }
+  .board-list { min-height: 120px; }
+}
+.board-list:empty { display: none; }
+.board-row {
+  display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 8px;
+  font-size: 15px; text-align: left;
+}
+.board-list .board-row:nth-child(odd) { background: rgba(255,255,255,0.04); }
+.board-row .rank { width: 44px; flex-shrink: 0; opacity: 0.7; }
+.board-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-row .pts { font-weight: bold; }
+.board-row.me, .board-list .board-row.me { background: var(--accent); color: #fff; }
+.board-row.me .rank { opacity: 1; }
+.board-me { margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,0.25); }
+.board-me.hidden { display: none; }

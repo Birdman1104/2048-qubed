@@ -17,12 +17,18 @@ const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2)
 const easeOutBack = (t) => { const c = 1.70158; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
 
 export class Game {
-  constructor(root, assets) {
+  /**
+   * hooks: { best, onStart(), onBest(best), onGameOver({ score, best, newBest }), onLogin() }
+   * The board is built behind the start menu; nothing moves until `start()` is called.
+   */
+  constructor(root, assets, hooks = {}) {
     this.root = root;
     this.assets = assets;
+    this.hooks = hooks;
     this.entities = [];
     this.clock = new THREE.Clock();
     this.shake = 0;
+    this.started = false;
 
     this._initRenderer();
     this._initScene();
@@ -30,14 +36,16 @@ export class Game {
     this._buildLevel();
     this.textures = new TextureBank(this.renderer, assets.glove);
     this.effects = new Effects(this.scene);
-    this.ui = new UI(root, () => this.restart());
+    this.ui = new UI(root, { onPlay: () => this.start(), onLogin: () => hooks.onLogin?.() });
     this.boxGeometry = new RoundedBoxGeometry(SIZE, SIZE, SIZE, 3, C.box.cornerRadius);
     this._initInput();
 
-    this.best = Number(localStorage.getItem(C.score.storageKey) || 0);
+    this.best = hooks.best || 0;
     this.restart();
     this.renderer.setAnimationLoop(() => this._tick());
   }
+
+  get playing() { return this.started && !this.over; }
 
   // ---------------------------------------------------------------- setup
 
@@ -251,7 +259,7 @@ export class Game {
     this.keys = new Set();
 
     el.addEventListener('pointerdown', (e) => {
-      if (!this.held || this.over || this.drag) return;
+      if (!this.held || !this.playing || this.drag) return;
       el.setPointerCapture(e.pointerId);
       const x = this._pointerWorldX(e);
       this.drag = { id: e.pointerId, startX: x ?? 0, boxX: this.held.mesh.position.x };
@@ -271,6 +279,9 @@ export class Game {
 
     window.addEventListener('keydown', (e) => {
       this.keys.add(e.code);
+      if (!this.playing) return;
+      // keep the embedding page from scrolling and focused buttons from being pressed mid-game
+      if (['Space', 'Enter', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
       if ((e.code === 'Space' || e.code === 'Enter' || e.code === 'ArrowUp' || e.code === 'KeyW') && !e.repeat) this._throw();
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
@@ -292,6 +303,18 @@ export class Game {
 
   // ---------------------------------------------------------------- game state
 
+  start() {
+    if (this.over || this.started) this.restart();
+    this.started = true;
+    this.ui.hideMenu();
+    this.hooks.onStart?.();
+  }
+
+  setBest(best) {
+    this.best = Math.max(best, this.score);
+    this.ui.setBest(this.best);
+  }
+
   restart() {
     for (const e of this.entities) this._removeEntity(e);
     this.entities = [];
@@ -300,11 +323,14 @@ export class Game {
     this.drag = null;
     this.over = false;
     this.score = 0;
+    this.bestAtStart = this.best;
     this.progress = 0;
     this.boosterThreshold = C.boosters.firstThreshold;
     this.boosterQueue = [];
     this.backRowQueue = [];
     this.throws = 0;
+    this.playTime = 0;
+    this.idleTime = 0;
     this.spawnTimer = 0;
     this.wildTimer = 0;
     this.wildIndex = 0;
@@ -332,9 +358,9 @@ export class Game {
 
   _pickSpawnValue() {
     const S = C.spawn;
-    let vals = [...new Set(this.entities.filter((e) => e.kind === 'normal' && e.body).map((e) => e.value))]
-      .filter((v) => v <= S.maxSpawnValue)
-      .sort((a, b) => a - b);
+    const max = Math.min(this._boardMaxValue(), S.maxSpawnValue);
+    let vals = [];
+    for (let v = 2; v <= max; v *= 2) vals.push(v);
     if (!vals.length) vals = S.fallbackPool;
     const weights = vals.map((_, i) => Math.pow(S.smallBias, i));
     let r = Math.random() * weights.reduce((a, b) => a + b, 0);
@@ -434,9 +460,18 @@ export class Game {
       e.hit = false;
     }
     this.throws++;
+    this.idleTime = 0;
     this.spawnTimer = C.throw.spawnDelay;
     const Pz = C.pusher;
-    if (Pz.enabled && Pz.trigger === 'throws' && this.throws % Pz.everyThrows === 0) this.pusher.pendingDelay = Pz.delayAfterThrow;
+    if (Pz.enabled && Pz.trigger === 'throws' && this.throws % Pz.everyThrows === 0) {
+      this.pusher.pendingDelay = Pz.delayAfterThrow;
+    }
+  }
+
+  _pusherInterval() {
+    const Pz = C.pusher;
+    const steps = Math.floor(this.playTime / Pz.secondsPerIntervalStep);
+    return Math.max(Pz.minEverySeconds, Pz.everySeconds - steps);
   }
 
   _settle(e) {
@@ -450,7 +485,7 @@ export class Game {
     this.score += points;
     if (this.score > this.best) {
       this.best = this.score;
-      localStorage.setItem(C.score.storageKey, String(this.best));
+      this.hooks.onBest?.(this.best);
     }
     this.ui.setScore(this.score, this.best);
     const p = this._toScreen(worldPos);
@@ -492,6 +527,7 @@ export class Game {
       culprit.blink = true;
     }
     this.shake = 0.3;
+    this.hooks.onGameOver?.({ score: this.score, best: this.best, newBest: this.score > this.bestAtStart });
     setTimeout(() => this.ui.showGameOver(this.score, this.best), 700);
   }
 
@@ -612,10 +648,10 @@ export class Game {
     const Pz = C.pusher;
     const s = this.pusher;
     if (!Pz.enabled) return;
-    if (s.phase === 'idle' && !this.over) {
+    if (s.phase === 'idle' && this.playing) {
       if (Pz.trigger === 'time') {
         s.timer += dt;
-        if (s.timer >= Pz.everySeconds) { s.timer = 0; s.phase = 'warn'; s.t = 0; }
+        if (s.timer >= this._pusherInterval()) { s.timer = 0; s.phase = 'warn'; s.t = 0; }
       } else if (s.pendingDelay >= 0) {
         s.pendingDelay -= dt;
         if (s.pendingDelay < 0) { s.phase = 'warn'; s.t = 0; }
@@ -715,7 +751,7 @@ export class Game {
   _tick() {
     const dt = Math.min(this.clock.getDelta(), 1 / 20);
 
-    if (this.held) {
+    if (this.held && this.playing) {
       const h = this.held;
       let dir = 0;
       if (this.keys.has('ArrowLeft') || this.keys.has('KeyA')) dir -= 1;
@@ -725,7 +761,7 @@ export class Game {
       if (h.kind === 'bomb') h.mesh.material.emissiveIntensity = 0;
     }
 
-    if (!this.over) this.world.step(C.physics.fixedTimeStep, dt, C.physics.maxSubSteps);
+    if (this.playing) this.world.step(C.physics.fixedTimeStep, dt, C.physics.maxSubSteps);
 
     const maxSpeed = Math.max(C.physics.maxSpeed, C.throw.speed * 1.05);
     for (const e of this.entities) {
@@ -759,7 +795,8 @@ export class Game {
       if (e.blink) e.mesh.material.emissiveIntensity = Math.sin(e.age * 20) > 0 ? 0.8 : 0;
     }
 
-    if (!this.over) {
+    if (this.playing) {
+      this.playTime += dt;
       const B = C.boosters.bomb;
       for (const e of this.entities) {
         if (e.state !== 'moving') continue;
@@ -779,6 +816,13 @@ export class Game {
       if (!this.held && this.spawnTimer > 0) {
         this.spawnTimer -= dt;
         if (this.spawnTimer <= 0) this._spawnHeld();
+      }
+
+      this.idleTime += dt;
+      const Bo = C.boosters;
+      if (this.idleTime > Bo.idleGrace && this.progress > 0) {
+        this.progress = Math.max(0, this.progress - Bo.idleDecayPerSecond * dt);
+        this.ui.setProgress(this.progress / this.boosterThreshold);
       }
     }
 

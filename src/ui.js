@@ -30,7 +30,7 @@ function drawIsoCube(canvas, face) {
 }
 
 export class UI {
-  constructor(root, onRestart) {
+  constructor(root, { onPlay, onLogin }) {
     const st = document.documentElement.style;
     st.setProperty('--accent', U.accent);
     st.setProperty('--progress', U.progressColor);
@@ -53,13 +53,28 @@ export class UI {
         <div class="popups"></div>
         <div class="toast"></div>
       </div>
-      <div class="overlay hidden">
+      <div class="overlay menu">
+        <button class="login hidden">LOG IN</button>
         <div class="panel">
+          <div class="title">2048 <span>QUBED</span></div>
+          <div class="hello">Hello <span class="player-name"></span></div>
+          <div class="menu-best">BEST 0</div>
+          <button class="btn play">PLAY</button>
+        </div>
+      </div>
+      <div class="overlay gameover hidden">
+        <div class="panel gameover-panel">
           <h1>GAME OVER</h1>
           <div class="final-label">SCORE</div>
           <div class="final-score">0</div>
           <div class="final-best">BEST 0</div>
-          <button class="restart">PLAY AGAIN</button>
+          <div class="board">
+            <div class="board-head">TOP ${CONFIG.leaderboard.size}</div>
+            <div class="board-status"></div>
+            <ol class="board-list"></ol>
+            <div class="board-me hidden"></div>
+          </div>
+          <button class="btn restart">PLAY AGAIN</button>
         </div>
       </div>
     `);
@@ -69,18 +84,40 @@ export class UI {
     this.fillEl = root.querySelector('.booster-fill');
     this.popups = root.querySelector('.popups');
     this.toastEl = root.querySelector('.toast');
-    this.overlay = root.querySelector('.overlay');
+    this.menu = root.querySelector('.overlay.menu');
+    this.playerNameEl = root.querySelector('.player-name');
+    this.menuBestEl = root.querySelector('.menu-best');
+    this.loginBtn = root.querySelector('.login');
+    this.overlay = root.querySelector('.overlay.gameover');
     this.finalScore = root.querySelector('.final-score');
     this.finalBest = root.querySelector('.final-best');
-    root.querySelector('.restart').addEventListener('click', onRestart);
+    this.boardStatus = root.querySelector('.board-status');
+    this.boardList = root.querySelector('.board-list');
+    this.boardMe = root.querySelector('.board-me');
+    const click = (sel, fn) => root.querySelector(sel).addEventListener('click', (e) => { e.currentTarget.blur(); fn(); });
+    click('.play', onPlay);
+    click('.restart', onPlay);
+    click('.login', onLogin);
     drawIsoCube(root.querySelector('.booster-icon'), drawMysteryFace());
   }
+
+  setPlayer(name, canLogin) {
+    this.playerNameEl.textContent = name;
+    this.loginBtn.classList.toggle('hidden', !canLogin);
+  }
+
+  setBest(best) {
+    this.bestEl.textContent = 'BEST ' + best;
+    this.menuBestEl.textContent = 'BEST ' + best;
+  }
+
+  hideMenu() { this.menu.classList.add('hidden'); }
 
   setNext(faceCanvas) { drawIsoCube(this.nextCanvas, faceCanvas); }
 
   setScore(score, best) {
     this.scoreEl.textContent = score;
-    this.bestEl.textContent = 'BEST ' + best;
+    this.setBest(best);
     this.scoreEl.classList.remove('bump');
     void this.scoreEl.offsetWidth;
     this.scoreEl.classList.add('bump');
@@ -110,7 +147,50 @@ export class UI {
     this.finalScore.textContent = score;
     this.finalBest.textContent = 'BEST ' + best;
     this.overlay.classList.remove('hidden');
+    this._scrollToMe();
   }
 
   hideGameOver() { this.overlay.classList.add('hidden'); }
+
+  // ---------------------------------------------------------------- leaderboard
+
+  setLeaderboardLoading() {
+    this.boardStatus.textContent = 'Loading scores…';
+    this.boardList.replaceChildren();
+    this.boardMe.classList.add('hidden');
+  }
+
+  setLeaderboardError() {
+    this.boardStatus.textContent = 'Leaderboard is unavailable right now';
+    this.boardList.replaceChildren();
+    this.boardMe.classList.add('hidden');
+  }
+
+  /** result: { rank, best, name, top: [{ name, score, me }] } */
+  setLeaderboard({ rank, best, name, top }) {
+    this.boardList.replaceChildren(...top.map((r, i) => this._row(i + 1, r.name, r.score, r.me)));
+    const inTop = top.some((r) => r.me);
+    this.boardStatus.textContent = inTop ? `You're #${rank}!` : `You're not in the top ${CONFIG.leaderboard.size} yet`;
+    this.boardMe.classList.toggle('hidden', inTop);
+    if (!inTop) this.boardMe.replaceChildren(this._row(rank, name, best, true));
+    this._scrollToMe();
+  }
+
+  _row(rank, name, score, me) {
+    const row = document.createElement('li');
+    row.className = 'board-row' + (me ? ' me' : '');
+    for (const [cls, text] of [['rank', '#' + rank], ['name', name], ['pts', score]]) {
+      const cell = document.createElement('span');
+      cell.className = cls;
+      cell.textContent = text;
+      row.appendChild(cell);
+    }
+    return row;
+  }
+
+  _scrollToMe() {
+    const row = this.boardList.querySelector('.me');
+    const list = this.boardList;
+    list.scrollTop = row ? row.offsetTop - list.clientHeight / 2 + row.offsetHeight / 2 : 0;
+  }
 }
