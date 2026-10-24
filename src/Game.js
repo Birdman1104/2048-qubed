@@ -5,6 +5,7 @@ import { CONFIG } from './config.js';
 import { TextureBank, valueColor } from './textures.js';
 import { Effects } from './effects.js';
 import { UI } from './ui.js';
+import { AudioBank } from './audio.js';
 
 const C = CONFIG;
 const BOARD = C.board;
@@ -36,13 +37,26 @@ export class Game {
     this._buildLevel();
     this.textures = new TextureBank(this.renderer, assets.glove);
     this.effects = new Effects(this.scene);
-    this.ui = new UI(root, { onPlay: () => this.start(), onLogin: () => hooks.onLogin?.() });
+    this.audio = new AudioBank();
+    this.ui = new UI(root, {
+      onPlay: () => this.start(),
+      onLogin: () => hooks.onLogin?.(),
+      onMuteToggle: () => this._toggleMute(),
+    });
     this.boxGeometry = new RoundedBoxGeometry(SIZE, SIZE, SIZE, 3, C.box.cornerRadius);
     this._initInput();
+    document.addEventListener('visibilitychange', () => {
+      this.audio.setSuspended(document.hidden);
+    });
 
     this.best = hooks.best || 0;
     this.restart();
     this.renderer.setAnimationLoop(() => this._tick());
+  }
+
+  _toggleMute() {
+    this.audio.setUserMuted(!this.audio.userMuted);
+    this.ui.setMuted(this.audio.userMuted);
   }
 
   get playing() { return this.started && !this.over; }
@@ -125,14 +139,30 @@ export class Game {
     this.world = w;
     // contacts are collected after every substep so short impacts are never missed
     this.touching = new Set();
+    this.contacting = new Set();
     w.addEventListener('preStep', () => this._updatePusher(P.fixedTimeStep));
     w.addEventListener('postStep', () => {
+      const next = new Set();
+      const A = C.audio;
       for (const c of w.contacts) {
-        const a = c.bi.entity, b = c.bj.entity;
-        if (a && b) this.touching.add(pairKey(c.bi, c.bj));
-        if (a && c.bj !== this.floorBody) a.hit = true;
-        if (b && c.bi !== this.floorBody) b.hit = true;
+        const bi = c.bi, bj = c.bj;
+        const a = bi.entity, b = bj.entity;
+        if (a && b) this.touching.add(pairKey(bi, bj));
+        if (a && bj !== this.floorBody) a.hit = true;
+        if (b && bi !== this.floorBody) b.hit = true;
+
+        const key = pairKey(bi, bj);
+        next.add(key);
+        if (this.contacting.has(key) || !this.playing) continue;
+        const rv = bi.velocity.vsub(bj.velocity);
+        if (rv.length() < A.bounceMinSpeed) continue;
+        if (a && b) this.audio.play('bounceBox', { minInterval: A.bounceCooldownMs });
+        else if ((a || b) && bi !== this.floorBody && bj !== this.floorBody
+          && (bi.material === this.matWall || bj.material === this.matWall)) {
+          this.audio.play('bounceWall', { minInterval: A.bounceCooldownMs });
+        }
       }
+      this.contacting = next;
     });
   }
 
@@ -307,6 +337,7 @@ export class Game {
     if (this.over || this.started) this.restart();
     this.started = true;
     this.ui.hideMenu();
+    this.audio.playTheme();
     this.hooks.onStart?.();
   }
 
@@ -331,9 +362,11 @@ export class Game {
     this.throws = 0;
     this.playTime = 0;
     this.idleTime = 0;
+    this.highScoreAnnounced = false;
     this.spawnTimer = 0;
     this.wildTimer = 0;
     this.wildIndex = 0;
+    this.contacting = new Set();
     this.pusher = { phase: 'idle', t: 0, timer: 0, pendingDelay: -1 };
     this.pusherBody.position.z = this.pusherRestZ;
     this.pusherBody.velocity.set(0, 0, 0);
@@ -462,6 +495,7 @@ export class Game {
     this.throws++;
     this.idleTime = 0;
     this.spawnTimer = C.throw.spawnDelay;
+    this.audio.play('shoot');
     const Pz = C.pusher;
     if (Pz.enabled && Pz.trigger === 'throws' && this.throws % Pz.everyThrows === 0) {
       this.pusher.pendingDelay = Pz.delayAfterThrow;
@@ -483,9 +517,15 @@ export class Game {
 
   _addScore(points, worldPos) {
     this.score += points;
+    let newHigh = false;
     if (this.score > this.best) {
       this.best = this.score;
       this.hooks.onBest?.(this.best);
+    }
+    if (!this.highScoreAnnounced && this.score > this.bestAtStart) {
+      this.highScoreAnnounced = true;
+      newHigh = true;
+      this.audio.play('highScore');
     }
     this.ui.setScore(this.score, this.best);
     const p = this._toScreen(worldPos);
@@ -494,6 +534,7 @@ export class Game {
     this.progress += points;
     if (this.progress >= this.boosterThreshold) this._awardBooster();
     this.ui.setProgress(this.progress / this.boosterThreshold);
+    if (newHigh) this.ui.toast('NEW HIGH SCORE');
   }
 
   _awardBooster() {
@@ -508,6 +549,7 @@ export class Game {
     if (this.next.kind === 'normal') this.next = { kind };
     else this.boosterQueue.push(kind);
     this._refreshNextUI();
+    this.audio.play('booster');
     this.ui.toast({ bomb: 'TNT!', wild: 'ANY VALUE MATCH!', glove: 'BOXING GLOVE!' }[kind]);
   }
 
@@ -521,6 +563,7 @@ export class Game {
     this.over = true;
     this.drag = null;
     this.aimLine.visible = false;
+    this.audio.stopTheme();
     if (culprit) {
       culprit.mesh.material = culprit.mesh.material.clone();
       culprit.mesh.material.emissive = new THREE.Color('#ff0000');
@@ -569,6 +612,7 @@ export class Game {
     e.body.angularVelocity.set((Math.random() - 0.5) * M.spin, (Math.random() - 0.5) * M.spin, (Math.random() - 0.5) * M.spin);
 
     this.effects.burst(pos, valueColor(value), M.particles, M.particleSpeed);
+    this.audio.play('merge');
     this._addScore(value, pos);
   }
 
@@ -651,10 +695,16 @@ export class Game {
     if (s.phase === 'idle' && this.playing) {
       if (Pz.trigger === 'time') {
         s.timer += dt;
-        if (s.timer >= this._pusherInterval()) { s.timer = 0; s.phase = 'warn'; s.t = 0; }
+        if (s.timer >= this._pusherInterval()) {
+          s.timer = 0; s.phase = 'warn'; s.t = 0;
+          this.audio.play('wallWarning');
+        }
       } else if (s.pendingDelay >= 0) {
         s.pendingDelay -= dt;
-        if (s.pendingDelay < 0) { s.phase = 'warn'; s.t = 0; }
+        if (s.pendingDelay < 0) {
+          s.phase = 'warn'; s.t = 0;
+          this.audio.play('wallWarning');
+        }
       }
     }
     s.t += dt;

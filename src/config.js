@@ -62,12 +62,12 @@ export const CONFIG = {
     thickness: 0.5,
     trigger: "time", // 'throws' | 'time'
     everyThrows: 4, // used when trigger is 'throws'
-    everySeconds: 12, // starting seconds between pushes
+    everySeconds: 8, // starting seconds between pushes
     minEverySeconds: 4, // floor — never pushes more often than this
     // every this many seconds of play, the interval drops by 1s (down to minEverySeconds)
     secondsPerIntervalStep: 35,
     delayAfterThrow: 1.0, // wait for the thrown box to settle before pushing (throws trigger)
-    warnDuration: 0.9, // blinking before the push
+    warnDuration: 1.4, // blinking before the push
     distance: 1.6, // how far it pushes forward
     pushDuration: 1.1,
     holdDuration: 0.25,
@@ -250,5 +250,13 @@ export const CONFIG = {
     panelBg: "rgba(20,24,30,0.55)",
     textColor: "#ffffff",
     popupDuration: 0.9,
+  },
+
+  audio: {
+    sfxVolume: 0.7,
+    themeVolume: 0.35,
+    // ignore soft resting contacts below this relative speed (units/s)
+    bounceMinSpeed: 1.2,
+    bounceCooldownMs: 60,
   },
 };

@@ -30,7 +30,7 @@ function drawIsoCube(canvas, face) {
 }
 
 export class UI {
-  constructor(root, { onPlay, onLogin }) {
+  constructor(root, { onPlay, onLogin, onMuteToggle }) {
     const st = document.documentElement.style;
     st.setProperty('--accent', U.accent);
     st.setProperty('--progress', U.progressColor);
@@ -44,7 +44,14 @@ export class UI {
         <div class="hud-bar">
           <div class="next"><canvas width="128" height="128"></canvas><span>NEXT</span></div>
           <div class="score"><div class="score-label">SCORE</div><div class="score-value">0</div><div class="score-best">BEST 0</div></div>
-          <div class="spacer"></div>
+          <button class="mute" type="button" aria-label="Mute" title="Mute">
+            <svg class="mute-on" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.8-1-3.3-2.5-4v8c1.5-.7 2.5-2.2 2.5-4zM14 3.2v2.1c2.9.9 5 3.5 5 6.7s-2.1 5.8-5 6.7v2.1c4-.9 7-4.5 7-8.8s-3-7.9-7-8.8z"/>
+            </svg>
+            <svg class="mute-off" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M16.5 12c0-1.8-1-3.3-2.5-4v2.2l2.5 2.5V12zm2.5 0c0 .9-.2 1.8-.5 2.6l1.5 1.5c.6-1.3.9-2.7.9-4.1 0-4.3-3-7.9-7-8.8v2.1c2.9.9 5 3.5 5 6.7zM4.3 3L3 4.3 7.7 9H3v6h4l5 5v-6.7l4.7 4.7c-.7.5-1.5.9-2.4 1.2v2.1c1.4-.3 2.6-1 3.7-1.8L19.7 21 21 19.7 4.3 3zM12 4L9.9 6.1 12 8.2V4z"/>
+            </svg>
+          </button>
         </div>
         <div class="booster">
           <canvas class="booster-icon" width="96" height="96"></canvas>
@@ -82,6 +89,7 @@ export class UI {
     this.scoreEl = root.querySelector('.score-value');
     this.bestEl = root.querySelector('.score-best');
     this.fillEl = root.querySelector('.booster-fill');
+    this.muteBtn = root.querySelector('.mute');
     this.popups = root.querySelector('.popups');
     this.toastEl = root.querySelector('.toast');
     this.menu = root.querySelector('.overlay.menu');
@@ -98,7 +106,14 @@ export class UI {
     click('.play', onPlay);
     click('.restart', onPlay);
     click('.login', onLogin);
+    click('.mute', onMuteToggle);
     drawIsoCube(root.querySelector('.booster-icon'), drawMysteryFace());
+  }
+
+  setMuted(muted) {
+    this.muteBtn.classList.toggle('is-muted', muted);
+    this.muteBtn.setAttribute('aria-label', muted ? 'Unmute' : 'Mute');
+    this.muteBtn.title = muted ? 'Unmute' : 'Mute';
   }
 
   setPlayer(name, canLogin) {
